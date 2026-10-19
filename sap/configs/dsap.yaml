@@ -1,0 +1,33 @@
+data:
+  pointcloud_n: 2048
+  num_offset: 11
+  padding: 0.12
+  zero_level: 0
+model:
+  grid_res: 128
+  psr_sigma: 1.7
+  psr_tanh: True
+  normal_normalize: False
+  predict_normal: True
+  predict_offset: True
+  c_dim: 64
+  s_offset: 0.002
+  local_coord: True
+  encoder: local_pool_pointnet
+  encoder_kwargs:
+    hidden_dim: 64
+    plane_type: 'grid'
+    grid_resolution: 48
+    unet3d: True
+    unet3d_kwargs:
+      num_levels: 3
+      f_maps: 64
+      in_channels: 64
+      out_channels: 64
+  decoder: simple_local
+  decoder_kwargs:
+    sample_mode: bilinear
+    hidden_size: 96
+generation:
+  psr_resolution: 128
+  psr_sigma: 2
