@@ -1,0 +1,128 @@
+optimizer : {
+  type: AdamW,
+  kwargs: {
+  lr : 0.0001, 
+  weight_decay : 0.0005
+}}
+
+scheduler: {
+  type: LambdaLR,
+  kwargs: {
+  decay_step: 21,
+  lr_decay: 0.9,
+  lowest_decay: 0.02  # min lr = lowest_decay * lr
+}}
+
+bnmscheduler: {
+  type: Lambda,
+  kwargs: {
+  decay_step: 21,
+  bn_decay: 0.5,
+  bn_momentum: 0.9,
+  lowest_decay: 0.01
+}}
+
+dataset : {
+  train : { _base_: /code/cfgs/dataset_configs/data.yaml, 
+            others: {subset: 'train'}},
+  val : { _base_: /code/cfgs/dataset_configs/data.yaml, 
+            others: {subset: 'test'}},
+  test : { _base_: /code/cfgs/dataset_configs/data.yaml, 
+            others: {subset: 'test'}}}
+# ========== 多阶段训练配置 ==========
+# 是否连续运行所有阶段
+run_all_stages: false  # true: 自动运行所有阶段, false: 只运行 current_stage
+
+# 当前训练阶段 (仅在 run_all_stages=false 时有效)
+current_stage: 'stage1'
+
+# 阶段执行顺序 (当 run_all_stages=true 时使用)
+stage_order: ['stage1', 'stage2']
+
+# ========== 各阶段详细配置 ==========
+training_stages: {
+  # 阶段1: 只训练补全模块
+  stage1: {
+    mode: 'completion_only',
+    epochs: 300,
+    lr: 0.0001,
+    # 可选：从预训练模型加载
+    load_ckpt: "null",
+    # 阶段描述（用于日志）
+    description: 'Training completion module only'
+  },
+  # 阶段2: 固定补全，训练去噪
+  stage2: {
+    mode: 'denoise_only',
+    epochs: 200,
+    lr: 0.0001,
+    # 自动从上一阶段加载（仅在 run_all_stages=true 时自动设置）
+    # 手动模式下需要指定路径
+    load_completion_ckpt: './experiments/AdaPoinTr/ZYTOOTH_models/default/ckpt-stage1-best.pth',
+    description: 'Training denoise module with frozen completion'
+  }
+}
+
+model : {
+    NAME: UniDCF_denoise, 
+    num_query: 512, 
+    num_points: 2048,
+    center_num: [512, 256],
+    global_feature_dim: 1024, 
+    encoder_type: graph,
+    decoder_type: fc,
+
+    # 训练模式 (由training_stages控制)
+    training_mode: 'completion_only',  # 'completion_only', 'denoise_only'
+    
+    # 是否启用去噪模块
+    enable_denoise: true,
+    
+    # 去噪模块配置
+    denoise_version: 'v2',  
+    denoise_k: 16,
+    denoise_hidden: 128,
+    denoise_out_scale: 0.03,
+    denoise_use_confidence: true,
+    use_completion_features: true,
+    
+    # 损失权重
+    w_coarse: 1.0,
+    w_fine: 1.0,
+    w_denoise: 1.0,
+    w_smooth: 0.1,
+    w_offset: 0.01,
+    
+    # 图像特征（可选）
+    use_image: true,
+    dino_path: '/data/experiments/UniDCF/dinov2_vitb14_pretrain.pth',
+
+    encoder_config: {
+      embed_dim: 384,
+      depth: 6,
+      num_heads: 6,
+      k: 8,
+      n_group: 2,
+      mlp_ratio: 2.,
+      block_style_list: ['attn-graph', 'attn', 'attn', 'attn', 'attn', 'attn'], 
+      combine_style: 'concat',
+    },
+    decoder_config: {
+      embed_dim: 384,
+      depth: 8,
+      num_heads: 6,
+      k: 8,
+      n_group: 2,
+      mlp_ratio: 2.,
+      self_attn_block_style_list: ['attn-graph', 'attn', 'attn', 'attn', 'attn', 'attn', 'attn', 'attn'], 
+      self_attn_combine_style: 'concat',
+      cross_attn_block_style_list: ['attn-graph', 'attn', 'attn', 'attn', 'attn', 'attn', 'attn', 'attn'], 
+      cross_attn_combine_style: 'concat',
+    }
+}
+  
+total_bs : 16
+step_per_update : 1
+max_epoch : 300
+
+consider_metric: CDL1
